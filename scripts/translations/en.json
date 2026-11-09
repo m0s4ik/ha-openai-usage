@@ -1,0 +1,31 @@
+{
+  "entity": {
+    "sensor": {
+      "cost_month": { "name": "Cost this month" },
+      "cost_today": { "name": "Cost today" },
+      "cost_today_ai_task": { "name": "AI task cost today" },
+      "cost_today_conversation": { "name": "Conversation cost today" },
+      "cost_today_stt": { "name": "Speech-to-text cost today" },
+      "cost_today_tts": { "name": "Text-to-speech cost today" },
+      "requests_today": { "name": "Requests today" },
+      "tokens_today": { "name": "Tokens today" }
+    }
+  },
+  "options": {
+    "error": {
+      "invalid_prices": "Invalid price table: it must be a JSON object of models, each with numeric prices (input, cached_input, output, audio_input, per_minute, per_1m_characters)."
+    },
+    "step": {
+      "init": {
+        "data": {
+          "prices": "Price overrides (JSON)"
+        },
+        "data_description": {
+          "prices": "Prices in USD: per 1M tokens for input, cached_input, output and audio_input; per minute of audio for per_minute; per 1M characters for per_1m_characters. Only the models and keys you write are changed; leave empty to use the built-in table."
+        },
+        "description": "Override or add model prices used to compute the cost of each request. Example: {example}",
+        "title": "Usage prices"
+      }
+    }
+  }
+}

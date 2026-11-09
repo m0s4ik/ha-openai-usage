@@ -1,0 +1,24 @@
+OpenAI (with usage) for Home Assistant
+Copyright 2026 Andrea Mattera
+
+This project is a modified copy of the "OpenAI" (openai_conversation)
+integration of Home Assistant Core 2026.11.0, developed by The Home Assistant
+Authors (https://github.com/home-assistant/core) and licensed under the
+Apache License, Version 2.0.
+
+- custom_components/openai_usage/ is derived from
+  homeassistant/components/openai_conversation/ (Home Assistant 2026.11.0).
+  Changes to the copied files are the lines marked "# openai_usage:" (domain,
+  sensor platform, usage hooks, options flow) and the manifest; translations
+  are the upstream ones with added strings. usage.py, sensor.py, prices.py and
+  usage_flow.py are new.
+- tests/ (except test_usage.py) is derived from
+  tests/components/openai_conversation/ of Home Assistant Core 2026.11.0;
+  tests/ha_helpers.py reproduces helpers from Home Assistant Core's test suite.
+- upstream/ contains the unmodified upstream files used to regenerate the copy.
+
+The whole project is distributed under the Apache License, Version 2.0 (see
+LICENSE).
+
+Not affiliated with or endorsed by OpenAI, Home Assistant, Nabu Casa or the
+Open Home Foundation. "OpenAI" and "ChatGPT" are trademarks of OpenAI.

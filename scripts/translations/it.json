@@ -1,0 +1,31 @@
+{
+  "entity": {
+    "sensor": {
+      "cost_month": { "name": "Costo del mese" },
+      "cost_today": { "name": "Costo di oggi" },
+      "cost_today_ai_task": { "name": "Costo attività IA di oggi" },
+      "cost_today_conversation": { "name": "Costo conversazioni di oggi" },
+      "cost_today_stt": { "name": "Costo riconoscimento vocale di oggi" },
+      "cost_today_tts": { "name": "Costo sintesi vocale di oggi" },
+      "requests_today": { "name": "Richieste di oggi" },
+      "tokens_today": { "name": "Token di oggi" }
+    }
+  },
+  "options": {
+    "error": {
+      "invalid_prices": "Tabella dei prezzi non valida: deve essere un oggetto JSON di modelli, ciascuno con prezzi numerici (input, cached_input, output, audio_input, per_minute, per_1m_characters)."
+    },
+    "step": {
+      "init": {
+        "data": {
+          "prices": "Prezzi personalizzati (JSON)"
+        },
+        "data_description": {
+          "prices": "Prezzi in USD: per 1M di token per input, cached_input, output e audio_input; al minuto di audio per per_minute; per 1M di caratteri per per_1m_characters. Cambiano solo i modelli e le voci scritte; vuoto = tabella integrata."
+        },
+        "description": "Modifica o aggiungi i prezzi dei modelli usati per calcolare il costo di ogni richiesta. Esempio: {example}",
+        "title": "Prezzi per il consumo"
+      }
+    }
+  }
+}

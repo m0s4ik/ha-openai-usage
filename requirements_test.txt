@@ -1,0 +1,13 @@
+# Home Assistant version this copy is derived from, and its test package.
+homeassistant==2026.11.0
+pytest-homeassistant==2026.11.0
+# Integration requirement (same as the official openai_conversation).
+openai==3.26.0
+# Requirements of the integrations the tests set up (conversation, assist_pipeline, tts).
+gazetteer-matcher==1.1.0
+hassil==3.12.1
+home-assistant-intents==2026.10.27
+pymicro-vad==1.0.1
+pyspeex-noise==1.0.2
+mutagen==1.48.1
+ha-ffmpeg==3.2.2

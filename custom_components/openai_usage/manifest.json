@@ -1,0 +1,30 @@
+{
+  "domain": "openai_usage",
+  "name": "OpenAI (with usage)",
+  "after_dependencies": [
+    "assist_pipeline",
+    "intent"
+  ],
+  "categories": [
+    "ai_voice.ai_models",
+    "ai_voice.speech"
+  ],
+  "codeowners": [
+    "@m0s4ik"
+  ],
+  "config_flow": true,
+  "connectivity": [
+    "cloud"
+  ],
+  "dependencies": [
+    "conversation"
+  ],
+  "documentation": "https://github.com/m0s4ik/ha-openai-usage",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/m0s4ik/ha-openai-usage/issues",
+  "requirements": [
+    "openai>=3.26.0"
+  ],
+  "version": "0.1.0"
+}
