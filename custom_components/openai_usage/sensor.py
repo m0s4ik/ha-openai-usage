@@ -132,7 +132,7 @@ class OpenAIUsageSensor(RestoreSensor):
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_device_info = dr.DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
-            name=f"{entry.title} usage",
+            name=f"{entry.title} · usage",
             manufacturer="OpenAI",
             model="Usage",
             entry_type=dr.DeviceEntryType.SERVICE,

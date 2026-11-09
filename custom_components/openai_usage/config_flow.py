@@ -173,7 +173,7 @@ class OpenAIConfigFlow(ConfigFlow, domain=DOMAIN):
                         entry, data_updates=user_input
                     )
                 return self.async_create_entry(
-                    title="ChatGPT",
+                    title="ChatGPT with Token & Cost Tracking",  # openai_usage: own title
                     data=user_input,
                     subentries=[
                         {

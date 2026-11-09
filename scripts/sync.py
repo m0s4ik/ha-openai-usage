@@ -133,6 +133,13 @@ COMPONENT_HOOKS = [
         "        return response_format, bytes(response_data)\n",
         f"        usage.async_record_speech(self, options[CONF_CHAT_MODEL], message)  {MARK}\n",
     ),
+    # config_flow.py: its own entry title, to tell it from the official one ("ChatGPT").
+    Hook(
+        "config_flow.py",
+        "replace",
+        '                    title="ChatGPT",\n',
+        f'                    title="ChatGPT with Token & Cost Tracking",  {MARK} own title\n',
+    ),
     # config_flow.py: options flow of the main entry (price overrides).
     Hook(
         "config_flow.py",
