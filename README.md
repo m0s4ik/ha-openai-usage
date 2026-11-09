@@ -1,5 +1,7 @@
 # OpenAI with Token & Cost Tracking
 
+[<img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-m0s4ik-FFDD00?logo=buymeacoffee&logoColor=black">](https://buymeacoffee.com/m0s4ik)
+
 A copy of Home Assistant's official **OpenAI** integration (`openai_conversation`,
 Home Assistant 2026.11) that also tells you **how many tokens each request used and
 what it cost**. It installs as a custom integration (domain `openai_usage`) and
@@ -174,6 +176,9 @@ python -m pytest                 # with requirements_test.txt installed
 
 CI checks that the generated files match `upstream/` plus the hooks, runs hassfest
 and the HACS validation, and runs the official tests (adapted) plus the usage tests.
+
+If this integration saved you some time, you can also
+[buy me a coffee ☕](https://buymeacoffee.com/m0s4ik): it keeps the next one coming.
 
 ## License
 
