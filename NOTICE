@@ -1,4 +1,4 @@
-OpenAI (with usage) for Home Assistant
+OpenAI with Token & Cost Tracking for Home Assistant
 Copyright 2026 Andrea Mattera
 
 This project is a modified copy of the "OpenAI" (openai_conversation)

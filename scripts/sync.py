@@ -38,7 +38,7 @@ REPO = "https://github.com/m0s4ik/ha-openai-usage"
 
 MANIFEST = {
     "domain": DOMAIN,
-    "name": "OpenAI (with usage)",
+    "name": "OpenAI with Token & Cost Tracking",
     "codeowners": ["@m0s4ik"],
     "documentation": REPO,
     "issue_tracker": f"{REPO}/issues",
@@ -277,6 +277,8 @@ def generated_files(directory: Path, own: set[str]) -> list[Path]:
         and path.name not in own
         and "__pycache__" not in path.parts
         and "snapshots" not in path.parts
+        # Our own icons (brand/): not generated from upstream.
+        and "brand" not in path.parts
     )
 
 

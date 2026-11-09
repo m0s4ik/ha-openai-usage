@@ -1,4 +1,4 @@
-# OpenAI (with usage)
+# OpenAI with Token & Cost Tracking
 
 A copy of Home Assistant's official **OpenAI** integration (`openai_conversation`,
 Home Assistant 2026.11) that also tells you **how many tokens each request used and
@@ -37,8 +37,8 @@ Requirements: Home Assistant 2026.11.0 or newer, with HACS (the Marketplace).
    [open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=m0s4ik&repository=ha-openai-usage&category=integration).
    While the repository is private, the GitHub account connected to HACS must have
    access to it.
-2. Download **OpenAI (with usage)** and restart Home Assistant.
-3. Settings → Devices & services → **Add integration** → *OpenAI (with usage)*, and
+2. Download **OpenAI with Token & Cost Tracking** and restart Home Assistant.
+3. Settings → Devices & services → **Add integration** → *OpenAI with Token & Cost Tracking*, and
    enter an OpenAI API key (the same key as the official integration is fine).
 
 It creates the same subentries as the official integration: a conversation agent,
@@ -136,7 +136,7 @@ Dated model names match their base model (`gpt-4o-mini-2024-07-18` uses
 `gpt-4o-mini`). A model that is not in the table is counted with cost 0 and a warning
 in the log (once per model).
 
-To override or add prices: Settings → Devices & services → *OpenAI (with usage)* →
+To override or add prices: Settings → Devices & services → *OpenAI with Token & Cost Tracking* →
 **Configure**, and write a JSON object; only the models and keys you write change:
 
 ```json

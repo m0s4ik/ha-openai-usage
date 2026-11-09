@@ -1,5 +1,5 @@
 {
-  "name": "OpenAI (with usage)",
+  "name": "OpenAI with Token & Cost Tracking",
   "homeassistant": "2026.11.0",
   "render_readme": true
 }

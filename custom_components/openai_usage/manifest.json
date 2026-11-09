@@ -1,6 +1,6 @@
 {
   "domain": "openai_usage",
-  "name": "OpenAI (with usage)",
+  "name": "OpenAI with Token & Cost Tracking",
   "after_dependencies": [
     "assist_pipeline",
     "intent"
@@ -26,5 +26,5 @@
   "requirements": [
     "openai>=3.26.0"
   ],
-  "version": "0.1.0"
+  "version": "0.1.1"
 }
