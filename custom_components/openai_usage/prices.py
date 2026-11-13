@@ -19,6 +19,8 @@ them in the integration options when they change. Batch, flex and priority tiers
 interpreter and image generation tool calls are not priced.
 """
 
+import math
+import re
 from typing import Final
 
 PRICE_KEYS: Final = (
@@ -84,52 +86,90 @@ DEFAULT_PRICES: Final[dict[str, ModelPrice]] = {
 }
 
 
+# A dated snapshot of a model: "<model>-YYYY-MM-DD".
+_DATED: Final = re.compile(r"(?P<base>.+)-\d{4}-\d{2}-\d{2}")
+
+
+class PriceError(ValueError):
+    """An invalid price override table.
+
+    ``reason`` is the translation key of the options flow error, and
+    ``placeholders`` the values for its ``{model}`` and ``{key}`` fields.
+    """
+
+    def __init__(self, reason: str, model: str = "", key: str = "") -> None:
+        """Initialize the error."""
+        super().__init__(f"{reason}: {model}.{key}" if key else f"{reason}: {model}")
+        self.reason = reason
+        self.placeholders = {"model": model, "key": key}
+
+
+def _valid_number(number: object) -> bool:
+    """Return True for a finite, non negative int or float (not a bool)."""
+    return (
+        not isinstance(number, bool)
+        and isinstance(number, (int, float))
+        and math.isfinite(number)
+        and number >= 0
+    )
+
+
 def merge_prices(
     base: dict[str, ModelPrice], overrides: dict[str, ModelPrice] | None
 ) -> dict[str, ModelPrice]:
     """Return the price table with per-model overrides applied.
 
     An override replaces only the keys it contains; a new model is added.
+    Values that are not valid prices (for example ``None`` stored by an older
+    version for a NaN) are ignored.
     """
     merged = {model: dict(price) for model, price in base.items()}
     for model, price in (overrides or {}).items():
-        merged.setdefault(model, {}).update(price)
+        if not isinstance(price, dict):
+            continue
+        valid = {
+            key: float(number)
+            for key, number in price.items()
+            if key in PRICE_KEYS and _valid_number(number)
+        }
+        if valid:
+            merged.setdefault(model, {}).update(valid)
     return merged
 
 
 def find_price(prices: dict[str, ModelPrice], model: str) -> ModelPrice | None:
     """Find the price for a model name, also for dated snapshots.
 
-    ``gpt-4o-mini-2024-07-18`` matches ``gpt-4o-mini``: the longest table key
-    that equals the model or is followed by ``-`` in the model name wins.
+    ``gpt-4o-mini-2024-07-18`` matches ``gpt-4o-mini``. Only a date suffix is
+    stripped: ``gpt-5-pro`` or ``o3-mini`` are other models with other prices,
+    so they never fall back to ``gpt-5`` or ``o3``.
     """
     if model in prices:
         return prices[model]
-    best: str | None = None
-    for key in prices:
-        if model.startswith(f"{key}-") and (best is None or len(key) > len(best)):
-            best = key
-    return prices[best] if best is not None else None
+    if (dated := _DATED.fullmatch(model)) is not None:
+        return prices.get(dated.group("base"))
+    return None
 
 
 def validate_overrides(value: object) -> dict[str, ModelPrice]:
-    """Validate a user supplied override table, raise ValueError if invalid."""
+    """Validate a user supplied override table, raise PriceError if invalid."""
     if not isinstance(value, dict):
-        raise ValueError("not an object")
+        raise PriceError("invalid_prices")
     result: dict[str, ModelPrice] = {}
-    for model, price in value.items():
-        if not isinstance(model, str) or not model or not isinstance(price, dict):
-            raise ValueError(f"invalid entry for {model!r}")
+    for raw_model, price in value.items():
+        model = raw_model.strip() if isinstance(raw_model, str) else ""
+        if not model:
+            raise PriceError("invalid_model")
+        if not isinstance(price, dict):
+            raise PriceError("invalid_entry", model)
+        if not price:
+            raise PriceError("empty_entry", model)
         entry: ModelPrice = {}
         for key, number in price.items():
             if key not in PRICE_KEYS:
-                raise ValueError(f"unknown price key {key!r}")
-            if (
-                isinstance(number, bool)
-                or not isinstance(number, (int, float))
-                or number < 0
-            ):
-                raise ValueError(f"invalid price for {model}.{key}")
+                raise PriceError("unknown_key", model, str(key))
+            if not _valid_number(number):
+                raise PriceError("invalid_number", model, key)
             entry[key] = float(number)
         result[model] = entry
     return result

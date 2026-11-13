@@ -11,6 +11,7 @@ integration already receives.
 
 from collections.abc import AsyncIterator
 from dataclasses import asdict, dataclass
+import json
 import logging
 from typing import TYPE_CHECKING, Any, Final
 
@@ -21,6 +22,7 @@ from openai.types.responses import (
 )
 
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util.hass_dict import HassKey
 
@@ -35,6 +37,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 EVENT_USAGE: Final = "openai_usage"
+ISSUE_UNKNOWN_PRICE: Final = "unknown_price_"
 CONF_PRICES: Final = "prices"
 
 KIND_CONVERSATION: Final = "conversation"
@@ -75,7 +78,8 @@ class UsageRecord:
     audio_input_tokens: int = 0
     audio_seconds: float = 0.0
     characters: int = 0
-    cost_usd: float = 0.0
+    # None when the cost could not be computed (no price for the model).
+    cost_usd: float | None = None
 
     @property
     def total_tokens(self) -> int:
@@ -86,15 +90,23 @@ class UsageRecord:
         """Return the data of the ``openai_usage`` event."""
         data = asdict(self)
         data.pop("audio_input_tokens")
-        data["cost_usd"] = round(self.cost_usd, 8)
+        if self.cost_usd is not None:
+            data["cost_usd"] = round(self.cost_usd, 8)
         return data
 
 
-def compute_cost(price: ModelPrice, record: UsageRecord) -> float:
-    """Compute the cost in USD of a request from a model price entry."""
+def compute_cost(price: ModelPrice, record: UsageRecord) -> float | None:
+    """Compute the cost in USD of a request from a model price entry.
+
+    Return None when the request used something (tokens, audio, characters)
+    that the price entry has no key for: its cost is unknown, not zero.
+    """
     cost = 0.0
+    needs_price = priced = False
     if record.input_tokens or record.output_tokens:
+        needs_price = True
         if any(key in price for key in ("input", "output", "audio_input")):
+            priced = True
             input_price = price.get("input", 0.0)
             cached = min(record.cached_input_tokens, record.input_tokens)
             audio = min(record.audio_input_tokens, record.input_tokens - cached)
@@ -105,12 +117,26 @@ def compute_cost(price: ModelPrice, record: UsageRecord) -> float:
             cost += record.output_tokens * price.get("output", 0.0)
             cost /= 1_000_000
         elif record.audio_seconds and "per_minute" in price:
+            priced = True
             cost += record.audio_seconds / 60 * price["per_minute"]
-    elif record.audio_seconds and "per_minute" in price:
-        cost += record.audio_seconds / 60 * price["per_minute"]
-    if record.characters and "per_1m_characters" in price:
-        cost += record.characters * price["per_1m_characters"] / 1_000_000
+    elif record.audio_seconds:
+        needs_price = True
+        if "per_minute" in price:
+            priced = True
+            cost += record.audio_seconds / 60 * price["per_minute"]
+    if record.characters:
+        needs_price = True
+        if "per_1m_characters" in price:
+            priced = True
+            cost += record.characters * price["per_1m_characters"] / 1_000_000
+    if needs_price and not priced:
+        return None
     return cost
+
+
+def issue_id_unknown_price(model: str) -> str:
+    """Return the repair issue id raised for a model without a price."""
+    return f"{ISSUE_UNKNOWN_PRICE}{model}"
 
 
 class UsageTracker:
@@ -132,19 +158,36 @@ class UsageTracker:
     def async_record(self, record: UsageRecord) -> None:
         """Price a record, fire the event and update the sensors."""
         price = find_price(self.prices, record.model)
-        if price is None:
-            if record.model not in self._warned:
-                self._warned.add(record.model)
-                _LOGGER.warning(
-                    "No price known for OpenAI model %s: its cost is counted as 0. "
-                    "Add it in the integration options",
-                    record.model,
-                )
-        else:
-            record.cost_usd = compute_cost(price, record)
+        record.cost_usd = None if price is None else compute_cost(price, record)
+        if record.cost_usd is None:
+            self._async_unknown_price(record.model)
         _LOGGER.debug("OpenAI usage: %s", record)
         self.hass.bus.async_fire(EVENT_USAGE, record.as_event_data())
         async_dispatcher_send(self.hass, signal_usage(self.entry_id), record)
+
+    @callback
+    def _async_unknown_price(self, model: str) -> None:
+        """Tell the user, once per model, that a request could not be priced."""
+        if model in self._warned:
+            return
+        self._warned.add(model)
+        _LOGGER.warning(
+            "No price known for OpenAI model %s: its cost is unknown and not "
+            "counted. Add it in the integration options",
+            model,
+        )
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            issue_id_unknown_price(model),
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="unknown_price",
+            translation_placeholders={
+                "model": model,
+                "example": json.dumps({model: {"input": 1.0, "output": 4.0}}),
+            },
+        )
 
 
 # The entry's title, to tell it from the official integration's "ChatGPT".
@@ -158,14 +201,25 @@ def async_setup_tracker(hass: HomeAssistant, entry: ConfigEntry) -> UsageTracker
     if entry.title == "ChatGPT":
         hass.config_entries.async_update_entry(entry, title=ENTRY_TITLE)
     tracker = UsageTracker(hass, entry.entry_id, entry.options.get(CONF_PRICES))
-    hass.data.setdefault(DATA_TRACKERS, {})[entry.entry_id] = tracker
+    trackers = hass.data.setdefault(DATA_TRACKERS, {})
+    trackers[entry.entry_id] = tracker
+
+    @callback
+    def _async_forget() -> None:
+        """Forget the tracker (on unload, and when the setup fails)."""
+        trackers.pop(entry.entry_id, None)
+
+    entry.async_on_unload(_async_forget)
+    # Models that have a price now (e.g. added in the options) are fixed.
+    for issue_id in [
+        issue_id
+        for (domain, issue_id) in ir.async_get(hass).issues
+        if domain == DOMAIN and issue_id.startswith(ISSUE_UNKNOWN_PRICE)
+    ]:
+        model = issue_id.removeprefix(ISSUE_UNKNOWN_PRICE)
+        if find_price(tracker.prices, model) is not None:
+            ir.async_delete_issue(hass, DOMAIN, issue_id)
     return tracker
-
-
-@callback
-def async_unload_tracker(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Forget the tracker of a config entry."""
-    hass.data.get(DATA_TRACKERS, {}).pop(entry.entry_id, None)
 
 
 def _new_record(entity: Entity, model: str) -> UsageRecord | None:
@@ -239,8 +293,13 @@ async def wrap_response_stream(entity: Entity, stream: Any) -> AsyncIterator[Any
 @callback
 def async_record_decision(entity: Entity, response: Any) -> None:
     """Record the usage of a Decisions API call (AI task evaluation)."""
+    subentry = getattr(entity, "subentry", None)
+    default = subentry.data.get(CONF_CHAT_MODEL, "") if subentry else ""
     async_record_response_usage(
-        entity, getattr(response, "model", None), getattr(response, "usage", None)
+        entity,
+        getattr(response, "model", None),
+        getattr(response, "usage", None),
+        default,
     )
 
 

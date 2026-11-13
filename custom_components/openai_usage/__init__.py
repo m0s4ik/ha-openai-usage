@@ -77,7 +77,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenAIConfigEntry) -> No
 async def async_unload_entry(hass: HomeAssistant, entry: OpenAIConfigEntry) -> None:
     """Unload OpenAI."""
     await hass.config_entries.async_unload_platforms_or_raise(entry, PLATFORMS)
-    usage.async_unload_tracker(hass, entry)  # openai_usage:
 
 
 async def async_update_options(hass: HomeAssistant, entry: OpenAIConfigEntry) -> None:

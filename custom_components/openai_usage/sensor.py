@@ -16,6 +16,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -51,12 +52,14 @@ class OpenAIUsageSensorDescription(SensorEntityDescription):
 
 
 def _cost(record: UsageRecord) -> float:
-    return record.cost_usd
+    """Return the cost of a record; an unknown cost adds nothing."""
+    return record.cost_usd or 0.0
 
 
 def _cost_description(
     key: str, period: Period, kind: str | None = None, enabled: bool = True
 ) -> OpenAIUsageSensorDescription:
+    """Return the description of a USD cost counter."""
     return OpenAIUsageSensorDescription(
         key=key,
         translation_key=key,
@@ -89,6 +92,15 @@ SENSORS: tuple[OpenAIUsageSensorDescription, ...] = (
         value_fn=lambda record: 1,
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement="requests",
+    ),
+    OpenAIUsageSensorDescription(
+        key="unpriced_requests_today",
+        translation_key="unpriced_requests_today",
+        period="day",
+        value_fn=lambda record: 1 if record.cost_usd is None else 0,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement="requests",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     *(
         _cost_description(f"cost_today_{kind}", "day", kind, enabled=False)
@@ -132,7 +144,8 @@ class OpenAIUsageSensor(RestoreSensor):
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_device_info = dr.DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
-            name=f"{entry.title} · usage",
+            translation_key="usage",
+            translation_placeholders={"title": entry.title},
             manufacturer="OpenAI",
             model="Usage",
             entry_type=dr.DeviceEntryType.SERVICE,

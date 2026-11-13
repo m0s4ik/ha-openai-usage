@@ -73,7 +73,8 @@ COMPONENT_HOOKS = [
         f'DOMAIN = "{UPSTREAM_DOMAIN}"\n',
         f'DOMAIN = "{DOMAIN}"  {MARK} own domain, installable side by side\n',
     ),
-    # __init__.py: sensor platform, tracker set up before the platforms.
+    # __init__.py: sensor platform, tracker set up before the platforms (it
+    # removes itself with entry.async_on_unload, also if the setup fails).
     Hook("__init__.py", "before", "from .const import (\n", IMPORT_USAGE + "\n"),
     Hook(
         "__init__.py",
@@ -86,12 +87,6 @@ COMPONENT_HOOKS = [
         "before",
         "    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)\n",
         f"    usage.async_setup_tracker(hass, entry)  {MARK}\n",
-    ),
-    Hook(
-        "__init__.py",
-        "after",
-        "    await hass.config_entries.async_unload_platforms_or_raise(entry, PLATFORMS)\n",
-        f"    usage.async_unload_tracker(hass, entry)  {MARK}\n",
     ),
     # entity.py: Responses API stream (conversation and AI task data/image).
     Hook("entity.py", "before", "from .const import (\n", IMPORT_USAGE + "\n"),

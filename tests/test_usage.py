@@ -2,6 +2,8 @@
 
 from collections.abc import AsyncIterable, Generator
 from datetime import datetime
+import json
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -30,21 +32,30 @@ from pytest_homeassistant.common import (
 from custom_components.openai_usage.const import DOMAIN
 from custom_components.openai_usage.prices import (
     DEFAULT_PRICES,
+    PriceError,
     find_price,
+    merge_prices,
     validate_overrides,
 )
 from custom_components.openai_usage.usage import (
     CONF_PRICES,
+    DATA_TRACKERS,
     EVENT_USAGE,
     UsageRecord,
+    async_record_decision,
     compute_cost,
+    issue_id_unknown_price,
 )
 from homeassistant.components import conversation, stt
 from homeassistant.components.tts import DATA_COMPONENT as TTS_COMPONENT
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import Context, HomeAssistant, State
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import (
+    device_registry as dr,
+    entity_registry as er,
+    issue_registry as ir,
+)
 from homeassistant.util import dt as dt_util
 
 from . import create_message_item
@@ -54,6 +65,7 @@ COST_MONTH = "sensor.openai_usage_cost_this_month"
 TOKENS_TODAY = "sensor.openai_usage_tokens_today"
 REQUESTS_TODAY = "sensor.openai_usage_requests_today"
 COST_TODAY_STT = "sensor.openai_usage_speech_to_text_cost_today"
+UNPRICED_TODAY = "sensor.openai_usage_unpriced_requests_today"
 
 
 def _usage(
@@ -128,12 +140,43 @@ def test_find_price_matches_dated_snapshots() -> None:
     )
     # The 2026 models: each its own price, never a shorter family name's.
     assert find_price(DEFAULT_PRICES, "gpt-6-luna") is DEFAULT_PRICES["gpt-6-luna"]
-    assert find_price(DEFAULT_PRICES, "gpt-6-luna-2026-10-01") is DEFAULT_PRICES["gpt-6-luna"]
+    assert (
+        find_price(DEFAULT_PRICES, "gpt-6-luna-2026-10-01")
+        is DEFAULT_PRICES["gpt-6-luna"]
+    )
     assert find_price(DEFAULT_PRICES, "gpt-5.4-mini") is DEFAULT_PRICES["gpt-5.4-mini"]
-    assert find_price(DEFAULT_PRICES, "gpt-5.4-mini-2026-03-17") is DEFAULT_PRICES["gpt-5.4-mini"]
+    assert (
+        find_price(DEFAULT_PRICES, "gpt-5.4-mini-2026-03-17")
+        is DEFAULT_PRICES["gpt-5.4-mini"]
+    )
     assert find_price(DEFAULT_PRICES, "gpt-6.1-sol") is DEFAULT_PRICES["gpt-6.1-sol"]
     assert find_price(DEFAULT_PRICES, "unknown-model") is None
     assert find_price(DEFAULT_PRICES, "gpt-4oo") is None
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        # Related models with other (often much higher) prices: never the
+        # price of the shorter name they start with.
+        "gpt-5-pro",
+        "gpt-5-codex",
+        "gpt-5-pro-2025-10-06",
+        "o3-pro",
+        "o3-mini",
+        "o3-deep-research",
+        "o4-mini-deep-research",
+        "gpt-4o-audio-preview",
+        "gpt-4o-search-preview",
+        "gpt-4o-mini-search-preview-2025-03-11",
+        # Not a date.
+        "gpt-4o-2024-08",
+        "gpt-4o-latest",
+    ],
+)
+def test_find_price_only_strips_a_date(model: str) -> None:
+    """Only a -YYYY-MM-DD suffix falls back to the base model's price."""
+    assert find_price(DEFAULT_PRICES, model) is None
 
 
 def test_compute_cost_tokens() -> None:
@@ -176,6 +219,25 @@ def test_compute_cost_audio_and_characters() -> None:
     assert compute_cost({"per_1m_characters": 15.0}, speech) == pytest.approx(0.03)
 
 
+def test_compute_cost_unknown_when_no_useful_key() -> None:
+    """A price without the key the request needs gives None, not 0."""
+    base = {"config_entry_id": "x", "entity_id": None, "subentry_id": None}
+    speech = UsageRecord(**base, kind="tts", model="m", characters=2000)
+    assert compute_cost({"input": 1.0, "output": 2.0}, speech) is None
+    assert compute_cost({}, speech) is None
+    tokens = UsageRecord(**base, kind="conversation", model="m", input_tokens=10)
+    assert compute_cost({"per_minute": 0.006}, tokens) is None
+    assert compute_cost({"per_1m_characters": 1.0}, tokens) is None
+    minutes = UsageRecord(**base, kind="stt", model="m", audio_seconds=60)
+    assert compute_cost({"input": 1.0}, minutes) is None
+    # Tokens without a token price, priced by duration instead.
+    stt = UsageRecord(**base, kind="stt", model="m", input_tokens=10, audio_seconds=60)
+    assert compute_cost({"per_minute": 0.006}, stt) == pytest.approx(0.006)
+    # Nothing used: nothing to pay, a known 0.
+    empty = UsageRecord(**base, kind="conversation", model="m")
+    assert compute_cost({}, empty) == 0.0
+
+
 def test_validate_overrides() -> None:
     """Override tables are validated."""
     assert validate_overrides({"m": {"input": 1, "output": 2.5}}) == {
@@ -191,6 +253,59 @@ def test_validate_overrides() -> None:
     ):
         with pytest.raises(ValueError):
             validate_overrides(bad)
+
+
+@pytest.mark.parametrize(
+    ("text", "reason", "placeholders"),
+    [
+        ("[]", "invalid_prices", {"model": "", "key": ""}),
+        ('{"m": 1}', "invalid_entry", {"model": "m", "key": ""}),
+        ('{"   ": {"input": 1}}', "invalid_model", {"model": "", "key": ""}),
+        ('{"": {"input": 1}}', "invalid_model", {"model": "", "key": ""}),
+        ('{"m": {}}', "empty_entry", {"model": "m", "key": ""}),
+        ('{"m": {"imput": 1}}', "unknown_key", {"model": "m", "key": "imput"}),
+        ('{"m": {"input": NaN}}', "invalid_number", {"model": "m", "key": "input"}),
+        (
+            '{"m": {"input": Infinity}}',
+            "invalid_number",
+            {"model": "m", "key": "input"},
+        ),
+        (
+            '{"m": {"input": -Infinity}}',
+            "invalid_number",
+            {"model": "m", "key": "input"},
+        ),
+        ('{"m": {"output": 1e400}}', "invalid_number", {"model": "m", "key": "output"}),
+        ('{"m": {"output": null}}', "invalid_number", {"model": "m", "key": "output"}),
+    ],
+)
+def test_validate_overrides_reasons(
+    text: str, reason: str, placeholders: dict[str, str]
+) -> None:
+    """Invalid tables say what is wrong (NaN and Infinity included)."""
+    with pytest.raises(PriceError) as err:
+        validate_overrides(json.loads(text))
+    assert err.value.reason == reason
+    assert err.value.placeholders == placeholders
+
+
+def test_validate_overrides_strips_model_names() -> None:
+    """Spaces around a model name are removed."""
+    assert validate_overrides({" gpt-4o ": {"input": 1}}) == {"gpt-4o": {"input": 1.0}}
+
+
+def test_merge_prices_drops_invalid_stored_values() -> None:
+    """Values saved by older versions that are not prices are ignored."""
+    merged = merge_prices(
+        {"m": {"input": 1.0, "output": 2.0}},
+        {
+            "m": {"input": None, "output": 3.0, "cached_input": float("nan")},
+            "n": {"input": "1", "output": True, "bogus": 1.0},
+            "o": None,  # type: ignore[dict-item]
+            "p": {"input": 0.5},
+        },
+    )
+    assert merged == {"m": {"input": 1.0, "output": 3.0}, "p": {"input": 0.5}}
 
 
 # --- events and sensors
@@ -268,21 +383,77 @@ async def test_conversation_usage_event_and_sensors(
 
 
 @pytest.mark.usefixtures("mock_init_component")
-async def test_unknown_model_costs_zero_and_warns_once(
+async def test_unknown_model_raises_a_repair_issue(
     hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
     mock_stream_with_usage: AsyncMock,
     caplog: pytest.LogCaptureFixture,
+    issue_registry: ir.IssueRegistry,
 ) -> None:
-    """An unknown model is counted with cost 0 and a single warning."""
+    """An unknown model: cost None, a repair issue, counted as unpriced."""
     events = async_capture_events(hass, EVENT_USAGE)
     for _ in range(2):
         mock_stream_with_usage.usages.append(("brand-new-model", _usage(10, 0, 10, 0)))
         await _converse(hass)
     await hass.async_block_till_done()
-    assert [event.data["cost_usd"] for event in events] == [0.0, 0.0]
+    assert [event.data["cost_usd"] for event in events] == [None, None]
     assert caplog.text.count("No price known for OpenAI model brand-new-model") == 1
     assert hass.states.get(TOKENS_TODAY).state == "40"
     assert hass.states.get(COST_TODAY).state == "0.0"
+    assert hass.states.get(UNPRICED_TODAY).state == "2"
+
+    issue_id = issue_id_unknown_price("brand-new-model")
+    issue = issue_registry.async_get_issue(DOMAIN, issue_id)
+    assert issue is not None
+    assert issue.translation_key == "unknown_price"
+    assert issue.severity is ir.IssueSeverity.WARNING
+    assert not issue.is_fixable
+    assert issue.translation_placeholders["model"] == "brand-new-model"
+
+    # A price added in the options fixes it when the entry reloads.
+    with patch("openai.resources.models.AsyncModels.list", new_callable=AsyncMock):
+        hass.config_entries.async_update_entry(
+            mock_config_entry,
+            options={CONF_PRICES: {"brand-new-model": {"input": 1.0, "output": 2.0}}},
+        )
+        await hass.async_block_till_done()
+    assert issue_registry.async_get_issue(DOMAIN, issue_id) is None
+
+    events.clear()
+    mock_stream_with_usage.usages.append(("brand-new-model", _usage(10, 0, 10, 0)))
+    await _converse(hass)
+    await hass.async_block_till_done()
+    assert events[0].data["cost_usd"] == pytest.approx((10 * 1.0 + 10 * 2.0) / 1e6)
+    assert hass.states.get(UNPRICED_TODAY).state == "2"
+
+
+@pytest.mark.usefixtures("mock_init_component")
+async def test_price_without_the_needed_key_is_unknown(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    issue_registry: ir.IssueRegistry,
+) -> None:
+    """A speech model priced only by tokens gives an unknown cost too."""
+    hass.config_entries.async_update_entry(
+        mock_config_entry, options={CONF_PRICES: {"tts-1": {"input": 1.0}}}
+    )
+    await hass.async_block_till_done()
+    tracker = hass.data[DATA_TRACKERS][mock_config_entry.entry_id]
+    tracker.prices["tts-1"] = {"input": 1.0}  # no per_1m_characters
+    events = async_capture_events(hass, EVENT_USAGE)
+    tracker.async_record(
+        UsageRecord(
+            config_entry_id=mock_config_entry.entry_id,
+            entity_id=None,
+            subentry_id=None,
+            kind="tts",
+            model="tts-1",
+            characters=100,
+        )
+    )
+    await hass.async_block_till_done()
+    assert events[0].data["cost_usd"] is None
+    assert issue_registry.async_get_issue(DOMAIN, issue_id_unknown_price("tts-1"))
 
 
 async def test_daily_and_monthly_reset(
@@ -520,6 +691,29 @@ async def test_ai_task_evaluate_usage(
     assert data["cost_usd"] == pytest.approx((1000 * 2.0 + 10 * 8.0) / 1e6)
 
 
+@pytest.mark.usefixtures("mock_init_component")
+async def test_decision_without_model_uses_the_subentry_model(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+) -> None:
+    """A Decisions response without a model is priced as the subentry's model."""
+    events = async_capture_events(hass, EVENT_USAGE)
+    entity = SimpleNamespace(
+        hass=hass,
+        entity_id="ai_task.openai_evaluation",
+        entry=mock_config_entry,
+        subentry=SimpleNamespace(
+            subentry_id="sub",
+            subentry_type="ai_task_evaluate",
+            data={"chat_model": "gpt-4o-mini"},
+        ),
+    )
+    usage = SimpleNamespace(input_tokens=1000, output_tokens=0)
+    async_record_decision(entity, SimpleNamespace(usage=usage))
+    await hass.async_block_till_done()
+    assert events[0].data["model"] == "gpt-4o-mini"
+    assert events[0].data["cost_usd"] == pytest.approx(1000 * 0.15 / 1e6)
+
+
 # --- options flow
 
 
@@ -536,7 +730,29 @@ async def test_options_flow(
         result["flow_id"], {CONF_PRICES: "{not json"}
     )
     assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {CONF_PRICES: "invalid_prices"}
+    assert result["errors"] == {CONF_PRICES: "invalid_json"}
+    assert "line 1 column 2" in result["description_placeholders"]["error"]
+
+    # The reason and the model/key at fault are shown.
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_PRICES: '{"gpt-4o": {"imput": 1}}'}
+    )
+    assert result["errors"] == {CONF_PRICES: "unknown_key"}
+    assert result["description_placeholders"]["model"] == "gpt-4o"
+    assert result["description_placeholders"]["key"] == "imput"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_PRICES: '{"gpt-4o": {"input": NaN}}'}
+    )
+    assert result["errors"] == {CONF_PRICES: "invalid_number"}
+    assert result["description_placeholders"]["key"] == "input"
+
+    # Nesting too deep for the JSON parser: a form error, not a crash.
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_PRICES: "[" * 100_000 + "]" * 100_000}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {CONF_PRICES: "invalid_json"}
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {CONF_PRICES: '{"gpt-4o-mini": {"output": 1}}'}
@@ -577,8 +793,6 @@ async def test_unload_removes_tracker(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry
 ) -> None:
     """Unloading the entry forgets the tracker."""
-    from custom_components.openai_usage.usage import DATA_TRACKERS  # noqa: PLC0415
-
     with patch("openai.resources.models.AsyncModels.list", new_callable=AsyncMock):
         assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
@@ -586,3 +800,35 @@ async def test_unload_removes_tracker(
     assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
     assert mock_config_entry.entry_id not in hass.data[DATA_TRACKERS]
     assert DOMAIN == "openai_usage"
+
+
+async def test_failed_setup_removes_tracker(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+) -> None:
+    """A setup that fails after the tracker was created does not leave it."""
+    with (
+        patch("openai.resources.models.AsyncModels.list", new_callable=AsyncMock),
+        patch(
+            "homeassistant.config_entries.ConfigEntries.async_forward_entry_setups",
+            side_effect=RuntimeError("boom"),
+        ),
+    ):
+        assert not await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+    assert mock_config_entry.state is ConfigEntryState.SETUP_ERROR
+    assert mock_config_entry.entry_id not in hass.data.get(DATA_TRACKERS, {})
+
+
+@pytest.mark.usefixtures("mock_init_component")
+async def test_usage_device_name_is_translated(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    device_registry: dr.DeviceRegistry,
+) -> None:
+    """The usage device is named "<entry title> usage" from the translations."""
+    device = device_registry.async_get_device_by_identifier(
+        (DOMAIN, mock_config_entry.entry_id), mock_config_entry.entry_id
+    )
+    assert device is not None
+    assert device.name == "OpenAI usage"
+    assert device.entry_type is dr.DeviceEntryType.SERVICE

@@ -1,19 +1,55 @@
 {
+  "device": {
+    "usage": {
+      "name": "Consumi di {title}"
+    }
+  },
   "entity": {
     "sensor": {
-      "cost_month": { "name": "Costo del mese" },
-      "cost_today": { "name": "Costo di oggi" },
-      "cost_today_ai_task": { "name": "Costo attività IA di oggi" },
-      "cost_today_conversation": { "name": "Costo conversazioni di oggi" },
-      "cost_today_stt": { "name": "Costo riconoscimento vocale di oggi" },
-      "cost_today_tts": { "name": "Costo sintesi vocale di oggi" },
-      "requests_today": { "name": "Richieste di oggi" },
-      "tokens_today": { "name": "Token di oggi" }
+      "cost_month": {
+        "name": "Costo del mese"
+      },
+      "cost_today": {
+        "name": "Costo di oggi"
+      },
+      "cost_today_ai_task": {
+        "name": "Costo attività IA di oggi"
+      },
+      "cost_today_conversation": {
+        "name": "Costo conversazioni di oggi"
+      },
+      "cost_today_stt": {
+        "name": "Costo riconoscimento vocale di oggi"
+      },
+      "cost_today_tts": {
+        "name": "Costo sintesi vocale di oggi"
+      },
+      "requests_today": {
+        "name": "Richieste di oggi"
+      },
+      "tokens_today": {
+        "name": "Token di oggi"
+      },
+      "unpriced_requests_today": {
+        "name": "Richieste senza prezzo di oggi"
+      }
+    }
+  },
+  "issues": {
+    "unknown_price": {
+      "title": "Nessun prezzo per il modello OpenAI {model}",
+      "description": "Le richieste fatte con il modello **{model}** non sono contate nei sensori del costo: la tabella dei prezzi non ha un prezzo per questo modello (o non per il tipo di consumo che riporta), quindi il loro costo è sconosciuto. L'evento `openai_usage` riporta `cost_usd: null` e il sensore *Richieste senza prezzo di oggi* le conta.\n\nPer correggere, aggiungere i prezzi del modello da Impostazioni → Dispositivi e servizi → *OpenAI with Token & Cost Tracking* → **Configura**, per esempio `{example}` (USD per 1M di token). Questo messaggio sparisce quando l'integrazione si ricarica con un prezzo per il modello."
     }
   },
   "options": {
     "error": {
-      "invalid_prices": "Tabella dei prezzi non valida: deve essere un oggetto JSON di modelli, ciascuno con prezzi numerici (input, cached_input, output, audio_input, per_minute, per_1m_characters)."
+      "empty_entry": "Nessun prezzo per {model}: scrivere almeno un prezzo o toglierlo.",
+      "invalid_entry": "I prezzi di {model} devono essere un oggetto JSON di voci di prezzo, per esempio {example}",
+      "invalid_json": "JSON non valido: {error}",
+      "invalid_model": "Il nome di un modello è vuoto.",
+      "invalid_number": "Il prezzo {model} → {key} deve essere un numero, 0 o più (non testo, true/false, NaN o Infinity).",
+      "invalid_prices": "La tabella dei prezzi deve essere un oggetto JSON di modelli, per esempio {example}",
+      "unknown_key": "Voce di prezzo sconosciuta \"{key}\" per {model}: usare input, cached_input, output, audio_input, per_minute o per_1m_characters."
     },
     "step": {
       "init": {

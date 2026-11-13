@@ -14,7 +14,7 @@ from homeassistant.config_entries import (
 from homeassistant.core import callback
 from homeassistant.helpers.selector import TextSelector, TextSelectorConfig
 
-from .prices import validate_overrides
+from .prices import PriceError, validate_overrides
 from .usage import CONF_PRICES
 
 EXAMPLE = '{"gpt-4o-mini": {"input": 0.15, "cached_input": 0.075, "output": 0.6}}'
@@ -28,12 +28,19 @@ class OpenAIUsageOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Show and validate the price override table."""
         errors: dict[str, str] = {}
+        placeholders = {"example": EXAMPLE, "model": "", "key": "", "error": ""}
         if user_input is not None:
             text = (user_input.get(CONF_PRICES) or "").strip()
             try:
                 overrides = validate_overrides(json.loads(text)) if text else {}
-            except ValueError:
-                errors[CONF_PRICES] = "invalid_prices"
+            except PriceError as err:
+                errors[CONF_PRICES] = err.reason
+                placeholders.update(err.placeholders)
+            except (ValueError, RecursionError) as err:
+                # JSONDecodeError (with line and column), huge integers, or
+                # nesting too deep for the parser.
+                errors[CONF_PRICES] = "invalid_json"
+                placeholders["error"] = str(err) or type(err).__name__
             else:
                 return self.async_create_entry(
                     data={**self.config_entry.options, CONF_PRICES: overrides}
@@ -54,7 +61,7 @@ class OpenAIUsageOptionsFlow(OptionsFlow):
             step_id="init",
             data_schema=schema,
             errors=errors,
-            description_placeholders={"example": EXAMPLE},
+            description_placeholders=placeholders,
         )
 
 

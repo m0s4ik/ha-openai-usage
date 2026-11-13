@@ -37,8 +37,6 @@ Requirements: Home Assistant 2026.11.0 or newer, with HACS (the Marketplace).
    `https://github.com/m0s4ik/ha-openai-usage` with type **Integration**, or use the
    link:
    [open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=m0s4ik&repository=ha-openai-usage&category=integration).
-   While the repository is private, the GitHub account connected to HACS must have
-   access to it.
 2. Download **OpenAI with Token & Cost Tracking** and restart Home Assistant.
 3. Settings → Devices & services → **Add integration** → *OpenAI with Token & Cost Tracking*, and
    enter an OpenAI API key (the same key as the official integration is fine).
@@ -59,8 +57,8 @@ and you can rename them.
 
 - **Assist pipeline** (any satellite, including the pipeline of a voice assistant such
   as *Alfred*): Settings → Voice assistants → open the pipeline → choose the
-  conversation agent, speech-to-text and text-to-speech provided by *OpenAI (with
-  usage)*. Settings that belong to the agent (prompt, model, tools) are in the
+  conversation agent, speech-to-text and text-to-speech provided by *OpenAI with
+  Token & Cost Tracking*. Settings that belong to the agent (prompt, model, tools) are in the
   subentry of this integration, not of the official one.
 - **AI tasks**: Settings → System → General → AI suggestions (default AI task entity),
   or pass the entity of this integration to `ai_task.generate_data`.
@@ -86,7 +84,7 @@ data:
   reasoning_tokens: 0
   audio_seconds: 0.0
   characters: 0
-  cost_usd: 0.0001734
+  cost_usd: 0.0001734        # null when the model has no price (see Prices)
 ```
 
 Where the numbers come from:
@@ -106,24 +104,28 @@ Where the numbers come from:
 | Cost this month | USD | resets at local midnight of the 1st |
 | Tokens today | tokens | input + output tokens |
 | Requests today | requests | |
+| Unpriced requests today | requests | diagnostic: requests whose cost is unknown (see Prices) |
 | Conversation / AI task / Speech-to-text / Text-to-speech cost today | USD | disabled by default |
 
 Values are restored after a restart if the day (or month) has not changed.
 
-The device is named after the config entry ("ChatGPT usage" by default), so the
-sensors are `sensor.chatgpt_usage_cost_today` and so on.
+The device is named after the config entry: *ChatGPT with Token & Cost Tracking
+usage* by default (*Consumi di …* in Italian). Home Assistant builds the entity IDs
+from the device name in its language when the entities are first created; in
+English they are `sensor.chatgpt_with_token_cost_tracking_usage_cost_today` and so
+on (check yours in the device page; you can rename them).
 
 Example: a notification when the daily cost goes over one dollar:
 
 ```yaml
 triggers:
   - trigger: numeric_state
-    entity_id: sensor.chatgpt_usage_cost_today
+    entity_id: sensor.chatgpt_with_token_cost_tracking_usage_cost_today
     above: 1
 actions:
   - action: notify.notify
     data:
-      message: "OpenAI spending today: {{ states('sensor.chatgpt_usage_cost_today') }} USD"
+      message: "OpenAI spending today: {{ states('sensor.chatgpt_with_token_cost_tracking_usage_cost_today') }} USD"
 ```
 
 ### Prices
@@ -135,11 +137,20 @@ prices as last known in November 2026, **not fetched from OpenAI**: check
 [openai.com/api/pricing](https://openai.com/api/pricing/) and override what changed.
 
 Dated model names match their base model (`gpt-4o-mini-2024-07-18` uses
-`gpt-4o-mini`). A model that is not in the table is counted with cost 0 and a warning
-in the log (once per model).
+`gpt-4o-mini`). Only a date suffix is ignored: related models such as `gpt-5-pro`,
+`o3-mini` or `gpt-4o-search-preview` have their own prices and never fall back to
+`gpt-5`, `o3` or `gpt-4o`.
+
+A request whose cost cannot be computed (a model that is not in the table, or a
+price without the key the request needs, e.g. a speech model without
+`per_1m_characters`) is **not counted as free**: its event has `cost_usd: null`, the
+cost sensors leave it out, *Unpriced requests today* counts it, and a repair issue
+in Settings → System → Repairs names the model. Add its price in the options and the
+issue goes away when the integration reloads.
 
 To override or add prices: Settings → Devices & services → *OpenAI with Token & Cost Tracking* →
-**Configure**, and write a JSON object; only the models and keys you write change:
+**Configure**, and write a JSON object; only the models and keys you write change
+(prices must be numbers, 0 or more; the form says which model and key is wrong):
 
 ```json
 {

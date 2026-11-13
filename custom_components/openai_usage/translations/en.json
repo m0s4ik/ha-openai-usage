@@ -229,6 +229,10 @@
     "organization_verification_required": {
       "description": "Your organization must be verified to use this model. Please go to {platform_settings} and select Verify Organization. If you just verified, it can take up to 15 minutes for access to propagate.",
       "title": "Organization verification required"
+    },
+    "unknown_price": {
+      "title": "No price for the OpenAI model {model}",
+      "description": "Requests made with the model **{model}** are not counted in the cost sensors: the price table has no price for it (or none for the kind of usage it reports), so their cost is unknown. The `openai_usage` event reports `cost_usd: null` for them, and the *Unpriced requests today* sensor counts them.\n\nTo fix it, add the model's prices from Settings → Devices & services → *OpenAI with Token & Cost Tracking* → **Configure**, for example `{example}` (USD per 1M tokens). This message goes away when the integration reloads with a price for the model."
     }
   },
   "selector": {
@@ -274,6 +278,11 @@
       }
     }
   },
+  "device": {
+    "usage": {
+      "name": "{title} usage"
+    }
+  },
   "entity": {
     "sensor": {
       "cost_month": {
@@ -299,12 +308,21 @@
       },
       "tokens_today": {
         "name": "Tokens today"
+      },
+      "unpriced_requests_today": {
+        "name": "Unpriced requests today"
       }
     }
   },
   "options": {
     "error": {
-      "invalid_prices": "Invalid price table: it must be a JSON object of models, each with numeric prices (input, cached_input, output, audio_input, per_minute, per_1m_characters)."
+      "empty_entry": "No prices given for {model}: write at least one price or remove it.",
+      "invalid_entry": "The prices of {model} must be a JSON object of price keys, for example {example}",
+      "invalid_json": "Not valid JSON: {error}",
+      "invalid_model": "A model name is empty.",
+      "invalid_number": "The price {model} → {key} must be a number, 0 or more (not text, true/false, NaN or Infinity).",
+      "invalid_prices": "The price table must be a JSON object of models, for example {example}",
+      "unknown_key": "Unknown price key \"{key}\" for {model}: use input, cached_input, output, audio_input, per_minute or per_1m_characters."
     },
     "step": {
       "init": {
