@@ -12,10 +12,10 @@ Other units:
 - ``per_minute``: per minute of audio (transcription billed by duration)
 - ``per_1m_characters``: per 1M characters of input text (speech)
 
-The values below are the best known list prices (standard tier) at the time
-of writing (2026-11). They are NOT fetched from OpenAI and may be outdated:
-check https://openai.com/api/pricing/ and override them in the integration
-options when they change. Batch, flex and priority tiers, web search, code
+The values below are OpenAI's list prices (standard tier, short context up to
+272K input tokens), checked on https://developers.openai.com/api/docs/pricing
+on 2026-11-13. They are NOT fetched from OpenAI and may be outdated: override
+them in the integration options when they change. Batch, flex and priority tiers, web search, code
 interpreter and image generation tool calls are not priced.
 """
 
@@ -32,7 +32,7 @@ PRICE_KEYS: Final = (
 
 type ModelPrice = dict[str, float]
 
-# Prices checked against the public price list as last known (2026-11).
+# Prices checked against the public price list on 2026-11-13.
 DEFAULT_PRICES: Final[dict[str, ModelPrice]] = {
     # Chat / Responses API models
     "gpt-4o-mini": {"input": 0.15, "cached_input": 0.075, "output": 0.60},
@@ -44,6 +44,20 @@ DEFAULT_PRICES: Final[dict[str, ModelPrice]] = {
     "gpt-5-mini": {"input": 0.25, "cached_input": 0.025, "output": 2.00},
     "gpt-5-nano": {"input": 0.05, "cached_input": 0.005, "output": 0.40},
     "gpt-5.1": {"input": 1.25, "cached_input": 0.125, "output": 10.00},
+    "gpt-5.4": {"input": 2.50, "cached_input": 0.25, "output": 15.00},
+    "gpt-5.4-mini": {"input": 0.75, "cached_input": 0.075, "output": 4.50},
+    "gpt-5.4-nano": {"input": 0.20, "cached_input": 0.02, "output": 1.25},
+    "gpt-5.4-pro": {"input": 30.00, "output": 180.00},
+    "gpt-5.5": {"input": 5.00, "cached_input": 0.50, "output": 30.00},
+    "gpt-5.5-pro": {"input": 30.00, "output": 180.00},
+    "gpt-5.6-luna": {"input": 0.20, "cached_input": 0.02, "output": 1.20},
+    "gpt-5.6-terra": {"input": 2.00, "cached_input": 0.20, "output": 12.00},
+    "gpt-5.6-sol": {"input": 4.00, "cached_input": 0.40, "output": 20.00},
+    "gpt-6-luna": {"input": 0.10, "cached_input": 0.01, "output": 0.50},
+    "gpt-6-sol": {"input": 2.00, "cached_input": 0.20, "output": 10.00},
+    "gpt-6-astra": {"input": 10.00, "cached_input": 1.00, "output": 50.00},
+    "gpt-6.1-terra": {"input": 1.00, "cached_input": 0.05, "output": 5.00},
+    "gpt-6.1-sol": {"input": 2.00, "cached_input": 0.10, "output": 10.00},
     "o3": {"input": 2.00, "cached_input": 0.50, "output": 8.00},
     "o4-mini": {"input": 1.10, "cached_input": 0.275, "output": 4.40},
     # Transcription (speech-to-text)

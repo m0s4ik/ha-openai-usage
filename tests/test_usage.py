@@ -126,6 +126,12 @@ def test_find_price_matches_dated_snapshots() -> None:
         find_price(DEFAULT_PRICES, "gpt-5-mini-2025-08-07")
         is (DEFAULT_PRICES["gpt-5-mini"])
     )
+    # The 2026 models: each its own price, never a shorter family name's.
+    assert find_price(DEFAULT_PRICES, "gpt-6-luna") is DEFAULT_PRICES["gpt-6-luna"]
+    assert find_price(DEFAULT_PRICES, "gpt-6-luna-2026-10-01") is DEFAULT_PRICES["gpt-6-luna"]
+    assert find_price(DEFAULT_PRICES, "gpt-5.4-mini") is DEFAULT_PRICES["gpt-5.4-mini"]
+    assert find_price(DEFAULT_PRICES, "gpt-5.4-mini-2026-03-17") is DEFAULT_PRICES["gpt-5.4-mini"]
+    assert find_price(DEFAULT_PRICES, "gpt-6.1-sol") is DEFAULT_PRICES["gpt-6.1-sol"]
     assert find_price(DEFAULT_PRICES, "unknown-model") is None
     assert find_price(DEFAULT_PRICES, "gpt-4oo") is None
 
