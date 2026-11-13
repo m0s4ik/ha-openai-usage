@@ -190,16 +190,9 @@ class UsageTracker:
         )
 
 
-# The entry's title, to tell it from the official integration's "ChatGPT".
-ENTRY_TITLE = "ChatGPT with Token & Cost Tracking"
-
-
 @callback
 def async_setup_tracker(hass: HomeAssistant, entry: ConfigEntry) -> UsageTracker:
     """Create the tracker of a config entry."""
-    # Entries made by 0.1.0/0.1.1 were titled "ChatGPT" like the official one.
-    if entry.title == "ChatGPT":
-        hass.config_entries.async_update_entry(entry, title=ENTRY_TITLE)
     tracker = UsageTracker(hass, entry.entry_id, entry.options.get(CONF_PRICES))
     trackers = hass.data.setdefault(DATA_TRACKERS, {})
     trackers[entry.entry_id] = tracker

@@ -133,8 +133,9 @@ actions:
 The built-in table is in [`prices.py`](custom_components/openai_usage/prices.py)
 (USD; per 1M tokens for `input`, `cached_input`, `output`, `audio_input`; per minute of
 audio for `per_minute`; per 1M characters for `per_1m_characters`). These are list
-prices as last known in November 2026, **not fetched from OpenAI**: check
-[openai.com/api/pricing](https://openai.com/api/pricing/) and override what changed.
+prices (standard tier, short context) checked on 13 November 2026, **not fetched from
+OpenAI**: check [OpenAI's pricing page](https://developers.openai.com/api/docs/pricing)
+and override what changed.
 
 Dated model names match their base model (`gpt-4o-mini-2024-07-18` uses
 `gpt-4o-mini`). Only a date suffix is ignored: related models such as `gpt-5-pro`,
