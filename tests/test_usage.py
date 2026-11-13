@@ -747,12 +747,13 @@ async def test_options_flow(
     assert result["errors"] == {CONF_PRICES: "invalid_number"}
     assert result["description_placeholders"]["key"] == "input"
 
-    # Nesting too deep for the JSON parser: a form error, not a crash.
+    # Deep nesting: a form error, not a crash. Whether the JSON parser gives up (RecursionError)
+    # or reads it all and the table is refused depends on the machine's stack.
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {CONF_PRICES: "[" * 100_000 + "]" * 100_000}
     )
     assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {CONF_PRICES: "invalid_json"}
+    assert result["errors"][CONF_PRICES] in {"invalid_json", "invalid_prices"}
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {CONF_PRICES: '{"gpt-4o-mini": {"output": 1}}'}
