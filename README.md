@@ -33,10 +33,11 @@ Assistant, keep a budget with an automation, or compare models.
 
 Requirements: Home Assistant 2026.11.0 or newer, with HACS (the Marketplace).
 
-1. Open HACS, menu (three dots) → **Custom repositories**, add
-   `https://github.com/m0s4ik/ha-openai-usage` with type **Integration**, or use the
-   link:
-   [open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=m0s4ik&repository=ha-openai-usage&category=integration).
+[![Open your Home Assistant instance and open this repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=m0s4ik&repository=ha-openai-usage&category=integration)
+
+1. Select the button above, or add the repository by hand: in the Marketplace
+   (HACS) menu choose **Custom repositories** and add
+   `https://github.com/m0s4ik/ha-openai-usage` with type **Integration**.
 2. Download **OpenAI with Token & Cost Tracking** and restart Home Assistant.
 3. Settings → Devices & services → **Add integration** → *OpenAI with Token & Cost Tracking*, and
    enter an OpenAI API key (the same key as the official integration is fine).
